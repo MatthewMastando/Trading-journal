@@ -1,0 +1,709 @@
+<title>Tape Journal</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=Figtree:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: one-column phone app — sticky header, scrolling view, bottom tab bar with a capture button in the middle */
+:root{
+  --bg:#f3f4f7; --surface:#ffffff; --sunk:#e9ebf1; --line:#d9dce5;
+  --fg:#161a26; --muted:#5d6477; --faint:#8a90a2;
+  --accent:#3346c8; --accent-fg:#ffffff; --accent-soft:#e3e6fb;
+  --gain:#0f8a5f; --gain-soft:#dcf2e8; --loss:#c8343f; --loss-soft:#fae1e3; --warn:#a86a00; --warn-soft:#fbefd6;
+  --shadow:0 1px 2px rgba(22,26,38,.06),0 8px 24px rgba(22,26,38,.08);
+  --f-display:"Familjen Grotesk","Helvetica Neue",Arial,sans-serif;
+  --f-body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  --tab-h:64px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f121a; --surface:#171b26; --sunk:#1e2330; --line:#2a3040;
+  --fg:#e8eaf2; --muted:#9aa1b5; --faint:#6b7287;
+  --accent:#8c9bff; --accent-fg:#0f121a; --accent-soft:#252b4a;
+  --gain:#3ccf91; --gain-soft:#14301f; --loss:#ff6b74; --loss-soft:#3a1a1e; --warn:#f0b54a; --warn-soft:#352a12;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f121a; --surface:#171b26; --sunk:#1e2330; --line:#2a3040;
+  --fg:#e8eaf2; --muted:#9aa1b5; --faint:#6b7287;
+  --accent:#8c9bff; --accent-fg:#0f121a; --accent-soft:#252b4a;
+  --gain:#3ccf91; --gain-soft:#14301f; --loss:#ff6b74; --loss-soft:#3a1a1e; --warn:#f0b54a; --warn-soft:#352a12;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35); color-scheme:dark}
+
+*{box-sizing:border-box}
+html,body{min-height:100%}
+body{background:var(--bg);color:var(--fg);font:15px/1.45 var(--f-body);-webkit-tap-highlight-color:transparent}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--bg)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.gain{color:var(--gain)} .loss{color:var(--loss)} .muted{color:var(--muted)}
+
+.wrap{max-width:640px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg)}
+header.top .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:14px 10px}
+h1{font:700 22px/1.1 var(--f-display);letter-spacing:-.01em;margin:0}
+h1 small{display:block;font:500 11px/1.4 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:3px}
+h2{font:600 17px/1.2 var(--f-display);margin:0;text-wrap:balance}
+h3{font:600 12px/1.3 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0}
+main{padding-bottom:calc(var(--tab-h) + 28px + env(safe-area-inset-bottom,0px))}
+main .wrap{display:flex;flex-direction:column;gap:14px;padding-block:4px 0}
+
+.banner{border-radius:12px;padding:10px 12px;font-size:13px;background:var(--warn-soft);color:var(--warn)}
+.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:500;color:var(--muted)}
+.chip[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.search{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:10px 12px}
+
+/* Trade log */
+.day{display:flex;flex-direction:column;gap:6px}
+.dayhead{display:flex;justify-content:space-between;align-items:baseline;padding:6px 2px 0}
+.dayhead span:first-child{font:600 13px var(--f-display)}
+.dayhead span:last-child{font:500 13px var(--f-mono)}
+.list{background:var(--surface);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.row{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:12px 14px;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+.side{font:600 11px/1 var(--f-mono);letter-spacing:.06em;padding:6px 7px;border-radius:6px;min-width:46px;text-align:center}
+.side.long{background:var(--gain-soft);color:var(--gain)} .side.short{background:var(--loss-soft);color:var(--loss)}
+.row .mid{min-width:0}
+.row .sym{font:600 16px/1.2 var(--f-display);display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.row .meta{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .pnl{text-align:right;font:600 15px var(--f-mono)}
+.row .pnl small{display:block;font-weight:400;font-size:11.5px;color:var(--muted)}
+.tag{font:500 10.5px/1 var(--f-mono);letter-spacing:.04em;padding:3px 6px;border-radius:5px;background:var(--sunk);color:var(--muted);text-transform:uppercase}
+.tag.open{background:var(--accent-soft);color:var(--accent)}
+.tag.plan{background:var(--accent-soft);color:var(--accent)}
+.tag.ok{background:var(--gain-soft);color:var(--gain)} .tag.bad{background:var(--loss-soft);color:var(--loss)} .tag.warn{background:var(--warn-soft);color:var(--warn)}
+
+.empty{background:var(--surface);border:1.5px dashed var(--line);border-radius:16px;padding:28px 20px;text-align:center;display:flex;flex-direction:column;gap:10px;align-items:center}
+.empty p{margin:0;color:var(--muted);max-width:32ch}
+.btn{border:0;border-radius:12px;padding:12px 16px;font-weight:600;background:var(--accent);color:var(--accent-fg);display:inline-flex;gap:8px;align-items:center;justify-content:center}
+.btn.ghost{background:var(--sunk);color:var(--fg)}
+.btn.danger{background:var(--loss-soft);color:var(--loss)}
+.btn.sm{padding:8px 12px;font-size:13px;border-radius:10px}
+.btn:disabled{opacity:.5}
+
+/* Stats */
+.kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.kpi{background:var(--surface);border-radius:14px;padding:12px 14px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:4px}
+.kpi b{font:600 20px/1.1 var(--f-mono);font-variant-numeric:tabular-nums}
+.kpi span{font-size:12px;color:var(--muted)}
+.kpi.hero{grid-column:1/-1;padding:16px}
+.kpi.hero b{font-size:32px}
+.card{background:var(--surface);border-radius:14px;padding:14px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:10px;min-width:0}
+.card .head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+svg text{fill:var(--muted);font:10px var(--f-mono)}
+.bars{display:flex;flex-direction:column;gap:8px}
+.bar{display:grid;grid-template-columns:minmax(0,7.5em) 1fr auto;gap:8px;align-items:center;font-size:13px}
+.bar .lab{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar .track{height:10px;background:var(--sunk);border-radius:5px;position:relative;overflow:hidden}
+.bar .fill{position:absolute;top:0;bottom:0;border-radius:5px}
+.bar .val{font:500 12.5px var(--f-mono);min-width:5.5em;text-align:right}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.cal .dow{font:500 10px var(--f-mono);color:var(--faint);text-align:center}
+.cal .d{aspect-ratio:1;max-width:100%;border-radius:8px;background:var(--sunk);display:flex;flex-direction:column;justify-content:space-between;padding:4px;font:500 10px var(--f-mono);color:var(--muted);min-width:0;overflow:hidden}
+.cal .d.pad{background:transparent}
+.cal .d em{font-style:normal;font-size:9.5px;text-align:right;color:var(--fg)}
+.coach{white-space:pre-wrap;font-size:14px;line-height:1.55}
+
+/* Plans */
+.plan{background:var(--surface);border-radius:14px;box-shadow:var(--shadow);padding:14px;display:flex;flex-direction:column;gap:8px;text-align:left;border:0;width:100%}
+.plan .top{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.plan .thesis{margin:0;color:var(--muted);font-size:13.5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.levels{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.levels div{background:var(--sunk);border-radius:8px;padding:6px 8px;display:flex;flex-direction:column;min-width:0}
+.levels span{font:500 10px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.levels b{font:600 13px var(--f-mono);overflow:hidden;text-overflow:ellipsis}
+
+/* Tab bar */
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:25;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav.tabs .wrap{display:grid;grid-template-columns:1fr 1fr auto 1fr;align-items:center;height:var(--tab-h);gap:4px}
+.tab{background:none;border:0;display:flex;flex-direction:column;align-items:center;gap:3px;font:600 11px var(--f-body);color:var(--faint);padding:6px 0}
+.tab svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8}
+.tab[aria-current="page"]{color:var(--accent)}
+.fab{width:56px;height:56px;border-radius:18px;border:0;background:var(--accent);color:var(--accent-fg);box-shadow:var(--shadow);margin-top:-22px;display:grid;place-items:center}
+.fab svg{width:26px;height:26px;stroke:currentColor;fill:none;stroke-width:2}
+
+/* Sheets */
+.scrim{position:fixed;inset:0;z-index:40;background:rgba(10,12,20,.45);display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--bg);width:100%;max-width:640px;max-height:calc(100% - env(safe-area-inset-top,0px) - 24px);border-radius:20px 20px 0 0;display:flex;flex-direction:column;overflow:hidden;animation:up .22s ease-out}
+@keyframes up{from{transform:translateY(24px);opacity:.6}}
+@media (prefers-reduced-motion:reduce){.sheet{animation:none}}
+.sheet .bar-top{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:14px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));border-bottom:1px solid var(--line);background:var(--surface)}
+.sheet .body{overflow-y:auto;padding:14px max(16px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:14px;-webkit-overflow-scrolling:touch}
+.x{background:var(--sunk);border:0;border-radius:10px;width:34px;height:34px;font-size:18px;line-height:1}
+fieldset{border:0;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f.full{grid-column:1/-1}
+.f label,.lbl{font:500 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.f input,.f select,.f textarea{width:100%;min-width:0;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:10px 11px;font-size:16px}
+.f textarea{min-height:84px;resize:vertical}
+.f input.num{font-family:var(--f-mono)}
+.seg{display:flex;background:var(--sunk);border-radius:10px;padding:3px;gap:3px}
+.seg button{flex:1;border:0;background:none;border-radius:8px;padding:8px 6px;font-weight:600;font-size:13px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.seg.side button[data-v="long"][aria-pressed="true"]{color:var(--gain)}
+.seg.side button[data-v="short"][aria-pressed="true"]{color:var(--loss)}
+.shots{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
+.shot{flex:none;width:88px;height:88px;border-radius:10px;background:var(--sunk);border:1px solid var(--line);position:relative;overflow:hidden;display:grid;place-items:center;color:var(--muted);font-size:12px}
+.shot img{width:100%;height:100%;object-fit:cover;display:block}
+.shot button.rm{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;border:0;background:rgba(0,0,0,.6);color:#fff;font-size:12px;line-height:1}
+.shot.add{border-style:dashed;cursor:pointer}
+.calc{display:flex;justify-content:space-between;gap:10px;background:var(--surface);border-radius:12px;padding:12px 14px;border:1px solid var(--line);flex-wrap:wrap}
+.calc div{display:flex;flex-direction:column;gap:2px}
+.calc span{font:500 10.5px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.calc b{font:600 16px var(--f-mono)}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.actions .btn{flex:1}
+.drop{border:1.5px dashed var(--accent);background:var(--accent-soft);border-radius:16px;padding:22px 16px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;color:var(--fg)}
+.drop p{margin:0;font-size:13px;color:var(--muted);max-width:34ch}
+.spin{width:18px;height:18px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .8s linear infinite;display:inline-block}
+@keyframes sp{to{transform:rotate(1turn)}}
+.cand{background:var(--surface);border-radius:12px;padding:12px;display:flex;justify-content:space-between;align-items:center;gap:10px;border:1px solid var(--line)}
+.viewer{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.92);display:grid;place-items:center;padding:16px}
+.viewer img{max-height:100%;border-radius:8px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--tab-h) + 20px + env(safe-area-inset-bottom,0px));z-index:70;background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;font-weight:500;box-shadow:var(--shadow);max-width:calc(100% - 32px)}
+.detail-sec{display:flex;flex-direction:column;gap:4px}
+.detail-sec p{margin:0;white-space:pre-wrap}
+</style>
+
+<header class="top"><div class="wrap">
+  <h1 id="title">Trade log<small id="subtitle">Tape Journal</small></h1>
+  <button class="btn sm ghost" data-act="new-plan" id="hdr-btn" hidden>New plan</button>
+</div></header>
+
+<main><div class="wrap" id="view"></div></main>
+
+<nav class="tabs" aria-label="Sections"><div class="wrap">
+  <button class="tab" data-tab="log" aria-current="page"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Log</button>
+  <button class="tab" data-tab="plans"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg>Plans</button>
+  <button class="fab" data-act="capture" aria-label="Add trade from screenshot"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+  <button class="tab" data-tab="stats"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Analytics</button>
+</div></nav>
+
+<input type="file" id="file-in" accept="image/*" multiple hidden>
+<div id="layer"></div>
+
+<script>
+(() => {
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const n = v => (v === "" || v == null || isNaN(+v)) ? null : +v;
+const money = (v, sign = true) => v == null ? "—" : (sign && v > 0 ? "+" : v < 0 ? "−" : "") + "$" + Math.abs(v).toLocaleString(undefined, {minimumFractionDigits: Math.abs(v) < 1000 ? 2 : 0, maximumFractionDigits: Math.abs(v) < 1000 ? 2 : 0});
+const px = v => v == null ? "—" : (+v).toLocaleString(undefined, {maximumFractionDigits: 4});
+const cls = v => v > 0 ? "gain" : v < 0 ? "loss" : "";
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const nowLocal = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
+const MISTAKES = ["FOMO", "Chased entry", "Oversized", "Moved stop", "Early exit", "Held loser", "No plan", "Revenge"];
+
+const S = { trades: [], plans: [], tab: "log", filter: "all", q: "", planFilter: "active", loaded: false, coach: "" };
+let db = null, assets = null, sample = null, imgOK = false;
+
+/* ---------- derived numbers ---------- */
+function mult(t) { return n(t.multiplier) ?? (t.instrument === "option" ? 100 : 1); }
+function pnlOf(t) {
+  if (n(t.pnl) != null) return n(t.pnl);
+  if (n(t.exit) == null || n(t.entry) == null || n(t.qty) == null) return null;
+  const dir = t.side === "short" ? -1 : 1;
+  return (n(t.exit) - n(t.entry)) * n(t.qty) * mult(t) * dir - (n(t.fees) || 0);
+}
+function riskOf(t) {
+  const stop = n(t.stop) ?? n(planOf(t)?.stop);
+  if (stop == null || n(t.entry) == null || n(t.qty) == null) return null;
+  const r = Math.abs(n(t.entry) - stop) * n(t.qty) * mult(t);
+  return r > 0 ? r : null;
+}
+function rOf(t) { const p = pnlOf(t), r = riskOf(t); return p != null && r ? p / r : null; }
+function isOpen(t) { return pnlOf(t) == null; }
+function planOf(t) { return t.planId ? S.plans.find(p => p.id === t.planId) : null; }
+function dayOf(t) { return (t.exitAt || t.entryAt || new Date(t.createdAt || 0).toISOString()).slice(0, 10); }
+function sortKey(t) { return t.exitAt || t.entryAt || new Date(t.createdAt || 0).toISOString(); }
+function fmtDay(d) { const x = new Date(d + "T12:00"); return isNaN(x) ? d : x.toLocaleDateString(undefined, {weekday: "short", month: "short", day: "numeric"}); }
+function fmtTime(s) { if (!s || s.length < 16) return ""; const x = new Date(s); return isNaN(x) ? "" : x.toLocaleTimeString(undefined, {hour: "numeric", minute: "2-digit"}); }
+function planRR(p) {
+  const e = n(p.entry), s = n(p.stop), t = n(p.target);
+  if (e == null || s == null || t == null || e === s) return null;
+  return Math.abs(t - e) / Math.abs(e - s);
+}
+function shotUrl(id) { return "/_blob/" + encodeURIComponent(id); }
+
+/* ---------- rendering ---------- */
+const view = $("#view");
+function setTab(tab) {
+  S.tab = tab;
+  document.querySelectorAll(".tab").forEach(b => b.dataset.tab === tab ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current"));
+  try { history.replaceState(null, "", "#" + tab); } catch {}
+  try { localStorage.setItem("tj-tab", tab); } catch {}
+  render();
+  window.scrollTo(0, 0);
+}
+function render() {
+  const titles = {log: "Trade log", plans: "Trade plans", stats: "Analytics"};
+  $("#title").firstChild.nodeValue = titles[S.tab];
+  $("#hdr-btn").hidden = S.tab !== "plans";
+  const banner = !S.loaded ? "" : !db ? `<div class="banner">Saving is off in this view. Open the journal signed in to claude.ai to keep your entries.</div>` : "";
+  view.innerHTML = banner + (S.tab === "log" ? renderLog() : S.tab === "plans" ? renderPlans() : renderStats());
+}
+
+function renderLog() {
+  const q = S.q.trim().toUpperCase();
+  let ts = S.trades.filter(t => (S.filter === "all" || (S.filter === "open" ? isOpen(t) : S.filter === "win" ? pnlOf(t) > 0 : S.filter === "loss" ? pnlOf(t) < 0 : true)) && (!q || (t.symbol || "").toUpperCase().includes(q) || (t.setup || "").toUpperCase().includes(q)));
+  ts.sort((a, b) => sortKey(b).localeCompare(sortKey(a)));
+  const chips = ["all", "open", "win", "loss"].map(f => `<button class="chip" data-act="filter" data-v="${f}" aria-pressed="${S.filter === f}">${{all: "All", open: "Open", win: "Winners", loss: "Losers"}[f]}</button>`).join("");
+  const top = `<input class="search" id="q" type="search" placeholder="Search symbol or setup" value="${esc(S.q)}" autocomplete="off"><div class="chips">${chips}</div>`;
+  if (!S.loaded) return top + `<div class="empty"><span class="spin"></span><p>Loading your trades…</p></div>`;
+  if (!S.trades.length) return `<div class="empty"><h2>Log your first trade</h2><p>Tap + and pick a screenshot of a fill, order confirmation or P&amp;L screen. Claude reads it and fills in the trade for you to check.</p><button class="btn" data-act="capture">Add from screenshot</button><button class="btn ghost sm" data-act="manual">Enter by hand</button></div>`;
+  if (!ts.length) return top + `<div class="empty"><p>No trades match this filter.</p></div>`;
+  const days = {};
+  ts.forEach(t => (days[dayOf(t)] ||= []).push(t));
+  return top + Object.entries(days).map(([d, list]) => {
+    const tot = list.reduce((a, t) => a + (pnlOf(t) || 0), 0);
+    return `<section class="day"><div class="dayhead"><span>${fmtDay(d)}</span><span class="${cls(tot)}">${money(tot)}</span></div><div class="list">${list.map(rowHtml).join("")}</div></section>`;
+  }).join("");
+}
+function rowHtml(t) {
+  const p = pnlOf(t), r = rOf(t), open = isOpen(t);
+  const meta = [t.qty != null && `${px(t.qty)} @ ${px(t.entry)}`, t.exit != null && t.exit !== "" && `→ ${px(t.exit)}`, t.setup].filter(Boolean).join(" · ");
+  return `<button class="row" data-act="open-trade" data-id="${t.id}">
+    <span class="side ${t.side === "short" ? "short" : "long"}">${t.side === "short" ? "SHORT" : "LONG"}</span>
+    <span class="mid"><span class="sym">${esc(t.symbol || "—")}${t.optionDetail ? `<span class="tag">${esc(t.optionDetail)}</span>` : ""}${open ? `<span class="tag open">Open</span>` : ""}${t.planId ? `<span class="tag plan">Plan</span>` : ""}</span><span class="meta">${esc(meta) || "&nbsp;"}</span></span>
+    <span class="pnl ${cls(p)}">${open ? "—" : money(p)}<small>${r != null ? (r >= 0 ? "+" : "") + r.toFixed(1) + "R" : fmtTime(t.exitAt || t.entryAt)}</small></span>
+  </button>`;
+}
+
+function renderPlans() {
+  const groups = {active: ["idea", "ready"], done: ["executed", "passed"]};
+  const chips = [["active", "Active"], ["done", "Executed / passed"], ["all", "All"]].map(([v, l]) => `<button class="chip" data-act="plan-filter" data-v="${v}" aria-pressed="${S.planFilter === v}">${l}</button>`).join("");
+  if (!S.loaded) return `<div class="empty"><span class="spin"></span><p>Loading plans…</p></div>`;
+  if (!S.plans.length) return `<div class="empty"><h2>Write the plan before the trade</h2><p>Capture the thesis, catalysts, entry, stop and target. When you take it, log the trade from the plan and analytics will show how planned trades compare to impulse ones.</p><button class="btn" data-act="new-plan">New plan</button></div>`;
+  const ps = S.plans.filter(p => S.planFilter === "all" || groups[S.planFilter].includes(p.status || "idea")).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  return `<div class="chips">${chips}</div>` + (ps.length ? ps.map(planCard).join("") : `<div class="empty"><p>Nothing here yet.</p></div>`);
+}
+const STATUS = {idea: ["Idea", ""], ready: ["Ready", "warn"], executed: ["Executed", "ok"], passed: ["Passed", "bad"]};
+function planCard(p) {
+  const rr = planRR(p), st = STATUS[p.status || "idea"];
+  const linked = S.trades.filter(t => t.planId === p.id), lp = linked.reduce((a, t) => a + (pnlOf(t) || 0), 0);
+  return `<button class="plan" data-act="open-plan" data-id="${p.id}">
+    <span class="top"><span class="sym" style="font:600 17px var(--f-display);display:flex;gap:8px;align-items:center"><span class="side ${p.side === "short" ? "short" : "long"}">${p.side === "short" ? "SHORT" : "LONG"}</span>${esc(p.symbol || "Untitled")}</span><span class="tag ${st[1]}">${st[0]}</span></span>
+    ${p.thesis ? `<p class="thesis">${esc(p.thesis)}</p>` : ""}
+    <span class="levels"><div><span>Entry</span><b>${px(n(p.entry))}</b></div><div><span>Stop</span><b class="loss">${px(n(p.stop))}</b></div><div><span>Target</span><b class="gain">${px(n(p.target))}</b></div><div><span>R:R</span><b>${rr ? rr.toFixed(1) : "—"}</b></div></span>
+    ${linked.length ? `<span class="meta muted" style="font-size:12.5px">${linked.length} trade${linked.length > 1 ? "s" : ""} logged · <span class="${cls(lp)} num">${money(lp)}</span></span>` : ""}
+  </button>`;
+}
+
+/* ---------- analytics ---------- */
+function stats(ts) {
+  const closed = ts.filter(t => !isOpen(t));
+  const p = closed.map(pnlOf), wins = p.filter(x => x > 0), losses = p.filter(x => x < 0);
+  const sum = a => a.reduce((x, y) => x + y, 0);
+  const gw = sum(wins), gl = -sum(losses);
+  const rs = closed.map(rOf).filter(x => x != null);
+  return { n: closed.length, open: ts.length - closed.length, net: sum(p), win: closed.length ? wins.length / closed.length : null,
+    avgW: wins.length ? gw / wins.length : null, avgL: losses.length ? -gl / losses.length : null,
+    pf: gl > 0 ? gw / gl : (gw > 0 ? Infinity : null), exp: closed.length ? sum(p) / closed.length : null,
+    avgR: rs.length ? sum(rs) / rs.length : null, best: p.length ? Math.max(...p) : null, worst: p.length ? Math.min(...p) : null };
+}
+function renderStats() {
+  if (!S.loaded) return `<div class="empty"><span class="spin"></span><p>Loading…</p></div>`;
+  const closed = S.trades.filter(t => !isOpen(t));
+  if (!closed.length) return `<div class="empty"><h2>Analytics fill in as you log</h2><p>Once you have closed trades you'll see net P&amp;L, win rate, profit factor, R-multiples, an equity curve, a P&amp;L calendar, and which setups and habits make or cost you money.</p><button class="btn" data-act="capture">Log a trade</button></div>`;
+  const s = stats(S.trades);
+  const pf = s.pf == null ? "—" : s.pf === Infinity ? "∞" : s.pf.toFixed(2);
+  let html = `<div class="kpis">
+    <div class="kpi hero"><span>Net P&amp;L · ${s.n} closed trade${s.n === 1 ? "" : "s"}${s.open ? ` · ${s.open} open` : ""}</span><b class="${cls(s.net)}">${money(s.net)}</b></div>
+    <div class="kpi"><span>Win rate</span><b>${s.win == null ? "—" : Math.round(s.win * 100) + "%"}</b></div>
+    <div class="kpi"><span>Profit factor</span><b>${pf}</b></div>
+    <div class="kpi"><span>Avg win</span><b class="gain">${money(s.avgW)}</b></div>
+    <div class="kpi"><span>Avg loss</span><b class="loss">${money(s.avgL)}</b></div>
+    <div class="kpi"><span>Expectancy / trade</span><b class="${cls(s.exp)}">${money(s.exp)}</b></div>
+    <div class="kpi"><span>Avg R</span><b class="${cls(s.avgR)}">${s.avgR == null ? "—" : (s.avgR >= 0 ? "+" : "") + s.avgR.toFixed(2) + "R"}</b></div>
+  </div>`;
+  html += `<div class="card"><div class="head"><h3>Equity curve</h3><span class="muted" style="font-size:12px">cumulative, by close</span></div>${equitySvg(closed)}</div>`;
+  html += `<div class="card"><div class="head"><h3>P&amp;L calendar</h3><span style="display:flex;gap:4px"><button class="btn sm ghost" data-act="cal" data-v="-1" aria-label="Previous month">‹</button><button class="btn sm ghost" data-act="cal" data-v="1" aria-label="Next month">›</button></span></div>${calendarHtml(closed)}</div>`;
+  const by = (keyFn) => { const m = {}; closed.forEach(t => { const k = keyFn(t); (Array.isArray(k) ? k : [k]).forEach(kk => { if (!kk) return; (m[kk] ||= []).push(pnlOf(t)); }); }); return Object.entries(m).map(([k, v]) => ({k, sum: v.reduce((a, b) => a + b, 0), n: v.length, w: v.filter(x => x > 0).length})).sort((a, b) => b.sum - a.sum); };
+  html += barsCard("By setup", by(t => t.setup || "No setup"));
+  const plan = by(t => t.planId ? "With a plan" : "No plan");
+  const adh = by(t => t.planId ? ({yes: "Followed plan", partial: "Partly followed", no: "Broke plan"}[t.followed] || null) : null);
+  html += barsCard("Planned vs unplanned", plan.concat(adh));
+  html += barsCard("Mistakes (cost)", by(t => (t.mistakes || []).length ? t.mistakes : null));
+  html += barsCard("By symbol", by(t => (t.symbol || "").toUpperCase()).slice(0, 8));
+  const dows = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  html += barsCard("By weekday", by(t => dows[new Date(dayOf(t) + "T12:00").getDay()]).sort((a, b) => dows.indexOf(a.k) - dows.indexOf(b.k)));
+  html += barsCard("By side", by(t => t.side === "short" ? "Short" : "Long"));
+  html += `<div class="card"><div class="head"><h3>Review with Claude</h3>${sample ? `<button class="btn sm" data-act="coach" id="coach-btn">${S.coach ? "Run again" : "Review my trading"}</button>` : ""}</div>
+    <div class="coach" id="coach-out">${S.coach ? esc(S.coach) : `<span class="muted">${sample ? "Claude reads your last 100 trades and plans and points out what's working, what's leaking money, and one rule to try next week." : "Open the journal in claude.ai to get a written review of your trading."}</span>`}</div></div>`;
+  return html;
+}
+function barsCard(title, rows) {
+  if (!rows.length) return "";
+  const max = Math.max(...rows.map(r => Math.abs(r.sum)), 1);
+  return `<div class="card"><h3>${title}</h3><div class="bars">${rows.map(r => `<div class="bar"><span class="lab">${esc(r.k)} <span class="muted num" style="font-size:11px">${r.n}·${Math.round(r.w / r.n * 100)}%</span></span><span class="track"><span class="fill" style="left:0;width:${Math.abs(r.sum) / max * 100}%;background:var(--${r.sum >= 0 ? "gain" : "loss"})"></span></span><span class="val ${cls(r.sum)}">${money(r.sum)}</span></div>`).join("")}</div></div>`;
+}
+function equitySvg(closed) {
+  const pts = closed.slice().sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+  let c = 0; const ys = [0, ...pts.map(t => (c += pnlOf(t)))];
+  const W = 340, H = 150, L = 46, R = 8, T = 10, B = 18;
+  let lo = Math.min(...ys), hi = Math.max(...ys); if (lo === hi) { lo -= 1; hi += 1; }
+  const pad = (hi - lo) * .08; lo -= pad; hi += pad;
+  const x = i => L + (W - L - R) * (ys.length === 1 ? 0 : i / (ys.length - 1));
+  const y = v => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
+  const line = ys.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("");
+  const area = line + `L${x(ys.length - 1).toFixed(1)},${y(Math.max(lo, Math.min(0, hi))).toFixed(1)}L${x(0).toFixed(1)},${y(Math.max(lo, Math.min(0, hi))).toFixed(1)}Z`;
+  const ticks = [lo + pad, (lo + hi) / 2, hi - pad];
+  const last = ys[ys.length - 1], col = last >= 0 ? "var(--gain)" : "var(--loss)";
+  const short = v => (v < 0 ? "−" : "") + "$" + (Math.abs(v) >= 1000 ? (Math.abs(v) / 1000).toFixed(1) + "k" : Math.abs(v).toFixed(0));
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Equity curve ending at ${money(last)}">
+    ${ticks.map(v => `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-width="1"/><text x="${L - 6}" y="${y(v) + 3}" text-anchor="end">${short(v)}</text>`).join("")}
+    ${lo < 0 && hi > 0 ? `<line x1="${L}" x2="${W - R}" y1="${y(0)}" y2="${y(0)}" stroke="var(--faint)" stroke-dasharray="3 3"/>` : ""}
+    <path d="${area}" fill="${col}" fill-opacity=".12"/>
+    <path d="${line}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round"/>
+    <circle cx="${x(ys.length - 1)}" cy="${y(last)}" r="3.5" fill="${col}"/>
+    <text x="${L}" y="${H - 4}">start</text><text x="${W - R}" y="${H - 4}" text-anchor="end">${pts.length} trades</text>
+  </svg>`;
+}
+let calOffset = 0;
+function calendarHtml(closed) {
+  const now = new Date(), m = new Date(now.getFullYear(), now.getMonth() + calOffset, 1);
+  const days = {}; closed.forEach(t => { const d = dayOf(t); days[d] = (days[d] || 0) + pnlOf(t); });
+  const ym = `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, "0")}`;
+  const inMonth = Object.entries(days).filter(([d]) => d.startsWith(ym));
+  const max = Math.max(1, ...inMonth.map(([, v]) => Math.abs(v)));
+  const tot = inMonth.reduce((a, [, v]) => a + v, 0);
+  const count = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate();
+  let cells = ["S", "M", "T", "W", "T", "F", "S"].map(d => `<div class="dow">${d}</div>`).join("");
+  for (let i = 0; i < m.getDay(); i++) cells += `<div class="d pad"></div>`;
+  for (let d = 1; d <= count; d++) {
+    const k = `${ym}-${String(d).padStart(2, "0")}`, v = days[k];
+    const bg = v == null ? "" : `background:color-mix(in srgb, var(--${v >= 0 ? "gain" : "loss"}) ${Math.round(18 + 55 * Math.abs(v) / max)}%, var(--sunk))`;
+    cells += `<div class="d" style="${bg}"><span>${d}</span>${v != null ? `<em>${Math.abs(v) >= 1000 ? (v / 1000).toFixed(1) + "k" : Math.round(v)}</em>` : ""}</div>`;
+  }
+  return `<div style="display:flex;justify-content:space-between;font-size:13px"><b style="font-family:var(--f-display)">${m.toLocaleDateString(undefined, {month: "long", year: "numeric"})}</b><span class="num ${cls(tot)}">${money(tot)}</span></div><div class="cal">${cells}</div>`;
+}
+
+/* ---------- sheets ---------- */
+const layer = $("#layer");
+function openSheet(title, body, extraHead = "") {
+  layer.innerHTML = `<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="bar-top"><h2>${esc(title)}</h2><span style="display:flex;gap:8px;align-items:center">${extraHead}<button class="x" data-act="close" aria-label="Close">×</button></span></div><div class="body">${body}</div></div></div>`;
+  document.body.style.overflow = "hidden";
+}
+function closeSheet() { layer.innerHTML = ""; document.body.style.overflow = ""; draft = null; }
+let draft = null; // {kind, data, shots: [{id?, url, file?}]}
+
+function toast(msg) {
+  const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.append(t);
+  setTimeout(() => t.remove(), 2600);
+}
+
+/* Capture sheet: pick screenshots, Claude extracts trades */
+function openCapture() {
+  draft = { kind: "capture", files: [] };
+  openSheet("Add trade", `
+    <div class="drop" id="drop">
+      <h2>Drop in a screenshot</h2>
+      <p>${imgOK ? "Fills, order confirmations, position or P&amp;L screens. Several at once is fine. You can also paste an image here." : "Screenshot reading needs the journal opened in claude.ai. You can still attach the image and enter the numbers yourself."}</p>
+      <button class="btn" data-act="pick">Choose screenshots</button>
+    </div>
+    <div id="cap-out"></div>
+    <button class="btn ghost" data-act="manual">Enter by hand instead</button>`);
+}
+async function handleFiles(files) {
+  files = [...files].filter(f => f.type.startsWith("image/"));
+  if (!files.length) return;
+  if (draft?.kind === "trade" || draft?.kind === "plan") { addShots(files); return; }
+  if (draft?.kind !== "capture") openCapture();
+  draft.files = files;
+  const out = $("#cap-out");
+  if (!imgOK) { openTrade(null, {}, files); return; }
+  out.innerHTML = `<div class="cand"><span style="display:flex;gap:10px;align-items:center"><span class="spin"></span>Reading ${files.length} screenshot${files.length > 1 ? "s" : ""}…</span></div>`;
+  try {
+    const lim = await sample.limits();
+    const send = files.slice(0, lim.images?.maxCount || 4);
+    const res = await sample.json(extractPrompt(), { images: send, modelTier: "default" });
+    const list = Array.isArray(res?.trades) ? res.trades.filter(t => t && (t.symbol || t.entry != null)) : [];
+    if (!list.length) { out.innerHTML = `<div class="banner">Claude couldn't find a trade in ${files.length > 1 ? "these images" : "this image"}. Try a fill or order-confirmation screen, or enter it by hand.</div>`; return; }
+    if (list.length === 1) { openTrade(null, clean(list[0]), files, res.warnings); return; }
+    draft.cands = list.map(clean);
+    out.innerHTML = `<div class="lbl">${list.length} trades found</div>` + draft.cands.map((t, i) => `<div class="cand"><span><b class="num">${esc(t.symbol)}</b> <span class="muted num" style="font-size:13px">${t.side === "short" ? "Short" : "Long"} ${px(t.qty)} @ ${px(t.entry)}${t.exit != null ? " → " + px(t.exit) : ""}</span></span><button class="btn sm ghost" data-act="cand" data-i="${i}">Review</button></div>`).join("") + `<button class="btn" data-act="save-all">Save all ${list.length}</button>${(res.warnings || []).length ? `<div class="banner">${esc(res.warnings.join(" "))}</div>` : ""}`;
+  } catch (e) {
+    out.innerHTML = `<div class="banner">${e?.code === "not_granted" ? "Screenshot reading was declined. Enter the trade by hand, or allow Claude in this page's permissions." : e?.code === "rate_limited" ? "Too many requests right now. Wait a minute and try again." : "Couldn't read the screenshot (" + esc(e?.code || e?.message || "error") + "). Try again or enter it by hand."}</div>`;
+  }
+}
+function extractPrompt() {
+  return `You are reading screenshots from a trader's brokerage or charting platform (order fills, order confirmations, positions, trade history, or P&L screens). Extract every distinct trade or position shown.
+Today is ${new Date().toISOString().slice(0, 10)}. If a date has no year, use the most recent past date that fits.
+Rules: never invent numbers; use null for anything not visible. Combine partial fills of the same order into one trade with average price. If a buy and later sell of the same symbol are both shown, make one closed trade (entry=buy avg, exit=sell avg for longs; reversed for shorts). For options put the contract (e.g. "450C 11/15") in optionDetail and the underlying in symbol; prices are per-share premium. If the screen shows realized P&L, put it in pnl.
+Reply with only JSON in this shape:
+{"trades":[{"symbol":"AAPL","instrument":"stock|option|future|crypto|forex","side":"long|short","qty":100,"entry":187.25,"exit":189.1,"entryAt":"YYYY-MM-DDTHH:MM or null","exitAt":"YYYY-MM-DDTHH:MM or null","fees":1.2,"pnl":185,"multiplier":null,"optionDetail":null,"notes":"short note of anything else useful, or null"}],"warnings":["anything ambiguous the trader should double-check"]}`;
+}
+function clean(t) {
+  const o = {};
+  ["symbol", "instrument", "side", "entryAt", "exitAt", "optionDetail", "notes"].forEach(k => { if (t[k] != null && t[k] !== "null") o[k] = String(t[k]); });
+  ["qty", "entry", "exit", "fees", "pnl", "multiplier"].forEach(k => { if (n(t[k]) != null) o[k] = n(t[k]); });
+  if (o.symbol) o.symbol = o.symbol.toUpperCase();
+  o.side = o.side === "short" ? "short" : "long";
+  if (!["stock", "option", "future", "crypto", "forex"].includes(o.instrument)) o.instrument = "stock";
+  if (o.qty != null) o.qty = Math.abs(o.qty);
+  ["entryAt", "exitAt"].forEach(k => { if (o[k] && !/^\d{4}-\d\d-\d\d/.test(o[k])) delete o[k]; else if (o[k]) o[k] = o[k].replace(" ", "T").slice(0, 16); });
+  return o;
+}
+
+/* Trade form */
+function field(id, label, val, type = "text", extra = "") {
+  return `<div class="f ${extra.includes("full") ? "full" : ""}"><label for="${id}">${label}</label><input id="${id}" name="${id}" type="${type}" ${type === "number" ? 'inputmode="decimal" step="any" class="num"' : ""} value="${esc(val ?? "")}" ${extra.replace("full", "")}></div>`;
+}
+function shotsHtml() { return `<div class="lbl">Screenshots</div>` + shotsInner(); }
+function shotsInner() {
+  return `<div class="shots" id="shots">${draft.shots.map((s, i) => `<div class="shot"><img src="${esc(s.url)}" alt="Screenshot ${i + 1}" data-act="view-shot" data-i="${i}"><button class="rm" data-act="rm-shot" data-i="${i}" aria-label="Remove screenshot">×</button></div>`).join("")}<button class="shot add" data-act="pick" aria-label="Add screenshot">+ Add</button></div>`;
+}
+function addShots(files) {
+  [...files].forEach(f => draft.shots.push({ file: f, url: URL.createObjectURL(f) }));
+  const el = $("#shots"); if (el) el.outerHTML = shotsInner();
+}
+function openTrade(id, prefill = {}, files = [], warnings = []) {
+  const existing = id ? S.trades.find(t => t.id === id) : null;
+  const t = existing ? {...existing} : { side: "long", instrument: "stock", entryAt: nowLocal(), ...prefill };
+  draft = { kind: "trade", id: existing?.id || null, data: t, shots: (t.shots || []).map(sid => ({ id: sid, url: shotUrl(sid) })) };
+  files.forEach(f => draft.shots.push({ file: f, url: URL.createObjectURL(f) }));
+  const plans = S.plans.filter(p => p.status !== "passed" || p.id === t.planId);
+  const setups = [...new Set(S.trades.map(x => x.setup).filter(Boolean))];
+  openSheet(existing ? "Edit trade" : "Review trade", `
+    ${warnings?.length ? `<div class="banner">${esc(warnings.join(" "))}</div>` : ""}
+    <div class="seg side" role="group" aria-label="Side"><button type="button" data-act="seg" data-k="side" data-v="long" aria-pressed="${t.side !== "short"}">Long</button><button type="button" data-act="seg" data-k="side" data-v="short" aria-pressed="${t.side === "short"}">Short</button></div>
+    <fieldset>
+      ${field("symbol", "Symbol", t.symbol, "text", 'autocapitalize="characters" autocomplete="off" placeholder="AAPL"')}
+      <div class="f"><label for="instrument">Instrument</label><select id="instrument">${["stock", "option", "future", "crypto", "forex"].map(v => `<option ${t.instrument === v ? "selected" : ""}>${v}</option>`).join("")}</select></div>
+      ${field("qty", "Quantity", t.qty, "number")}
+      ${field("optionDetail", "Contract", t.optionDetail, "text", 'placeholder="450C 11/15"')}
+      ${field("entry", "Entry price", t.entry, "number")}
+      ${field("exit", "Exit price", t.exit, "number", 'placeholder="open"')}
+      ${field("entryAt", "Entry time", t.entryAt, "datetime-local")}
+      ${field("exitAt", "Exit time", t.exitAt, "datetime-local")}
+      ${field("stop", "Stop", t.stop, "number")}
+      ${field("fees", "Fees", t.fees, "number")}
+      ${field("multiplier", "Multiplier", t.multiplier, "number", 'placeholder="auto"')}
+      ${field("pnl", "P&amp;L override", t.pnl, "number", 'placeholder="auto"')}
+    </fieldset>
+    <div class="calc" id="calc"></div>
+    <fieldset>
+      <div class="f"><label for="setup">Setup</label><input id="setup" list="setups" value="${esc(t.setup || "")}" placeholder="ORB, VWAP reclaim…" autocomplete="off"><datalist id="setups">${setups.map(s => `<option value="${esc(s)}">`).join("")}</datalist></div>
+      <div class="f"><label for="planId">From plan</label><select id="planId"><option value="">No plan</option>${plans.map(p => `<option value="${p.id}" ${t.planId === p.id ? "selected" : ""}>${esc(p.symbol)} · ${esc((p.thesis || "").slice(0, 30))}</option>`).join("")}</select></div>
+    </fieldset>
+    <div id="followed-wrap" ${t.planId ? "" : "hidden"}><div class="lbl" style="margin-bottom:4px">Followed the plan?</div><div class="seg" role="group" aria-label="Followed the plan">${[["yes", "Yes"], ["partial", "Partly"], ["no", "No"]].map(([v, l]) => `<button type="button" data-act="seg" data-k="followed" data-v="${v}" aria-pressed="${t.followed === v}">${l}</button>`).join("")}</div></div>
+    <div><div class="lbl" style="margin-bottom:4px">Execution grade</div><div class="seg" role="group" aria-label="Execution grade">${["A", "B", "C", "D"].map(v => `<button type="button" data-act="seg" data-k="grade" data-v="${v}" aria-pressed="${t.grade === v}">${v}</button>`).join("")}</div></div>
+    <div><div class="lbl" style="margin-bottom:6px">Mistakes</div><div class="chips" style="flex-wrap:wrap">${MISTAKES.map(m => `<button type="button" class="chip" data-act="mistake" data-v="${esc(m)}" aria-pressed="${(t.mistakes || []).includes(m)}">${m}</button>`).join("")}</div></div>
+    <div class="f"><label for="notes">Notes</label><textarea id="notes" placeholder="What did you see? How did you feel? What would you do differently?">${esc(t.notes || "")}</textarea></div>
+    ${shotsHtml()}
+    <div class="actions"><button class="btn" data-act="save-trade" id="save-btn">${existing ? "Save changes" : "Save trade"}</button></div>
+    ${existing ? `<button class="btn danger" data-act="del" data-kind="trades" data-id="${existing.id}">Delete trade</button>` : ""}
+  `);
+  calcTrade();
+}
+function readTradeForm() {
+  const d = draft.data, g = id => $("#" + id)?.value.trim();
+  ["symbol", "instrument", "optionDetail", "entryAt", "exitAt", "setup", "planId", "notes"].forEach(k => d[k] = g(k) || null);
+  ["qty", "entry", "exit", "stop", "fees", "multiplier", "pnl"].forEach(k => d[k] = n(g(k)));
+  if (d.symbol) d.symbol = d.symbol.toUpperCase();
+  return d;
+}
+function calcTrade() {
+  if (draft?.kind !== "trade") return;
+  const t = readTradeForm(), p = pnlOf(t), r = rOf(t), risk = riskOf(t);
+  $("#calc").innerHTML = `<div><span>P&amp;L</span><b class="${cls(p)}">${p == null ? "Open" : money(p)}</b></div><div><span>Risk</span><b>${risk ? money(risk, false) : "—"}</b></div><div><span>R multiple</span><b class="${cls(r)}">${r == null ? "—" : (r >= 0 ? "+" : "") + r.toFixed(2) + "R"}</b></div>`;
+  $("#followed-wrap").hidden = !t.planId;
+}
+
+/* Plan form */
+function openPlan(id) {
+  const ex = id ? S.plans.find(p => p.id === id) : null;
+  const p = ex ? {...ex} : { side: "long", status: "idea" };
+  draft = { kind: "plan", id: ex?.id || null, data: p, shots: (p.shots || []).map(sid => ({ id: sid, url: shotUrl(sid) })) };
+  const linked = ex ? S.trades.filter(t => t.planId === ex.id) : [];
+  openSheet(ex ? (p.symbol || "Plan") : "New plan", `
+    <div class="seg side" role="group" aria-label="Direction"><button type="button" data-act="seg" data-k="side" data-v="long" aria-pressed="${p.side !== "short"}">Long</button><button type="button" data-act="seg" data-k="side" data-v="short" aria-pressed="${p.side === "short"}">Short</button></div>
+    <fieldset>
+      ${field("symbol", "Symbol", p.symbol, "text", 'autocapitalize="characters" autocomplete="off" placeholder="NVDA"')}
+      <div class="f"><label for="horizon">Timeframe</label><select id="horizon">${["Intraday", "Swing (days)", "Position (weeks+)"].map(v => `<option ${p.horizon === v ? "selected" : ""}>${v}</option>`).join("")}</select></div>
+      <div class="f full"><label for="thesis">Thesis</label><textarea id="thesis" placeholder="Why this trade, why now? What does the market not see yet?">${esc(p.thesis || "")}</textarea></div>
+      <div class="f full"><label for="catalysts">Catalysts &amp; timing</label><textarea id="catalysts" style="min-height:60px" placeholder="Earnings 10/28 AMC, CPI Thursday…">${esc(p.catalysts || "")}</textarea></div>
+      ${field("entry", "Entry", p.entry, "number")}
+      ${field("stop", "Stop", p.stop, "number")}
+      ${field("target", "Target", p.target, "number")}
+      ${field("size", "Planned size", p.size, "number")}
+      <div class="f full"><label for="invalidation">Invalidation</label><input id="invalidation" value="${esc(p.invalidation || "")}" placeholder="What would prove me wrong before the stop?"></div>
+      <div class="f full"><label for="research">Research notes</label><textarea id="research" placeholder="Levels, flows, fundamentals, links, what others are saying…">${esc(p.research || "")}</textarea></div>
+    </fieldset>
+    <div class="calc" id="calc"></div>
+    <div><div class="lbl" style="margin-bottom:4px">Status</div><div class="seg" role="group" aria-label="Status">${Object.entries(STATUS).map(([v, [l]]) => `<button type="button" data-act="seg" data-k="status" data-v="${v}" aria-pressed="${(p.status || "idea") === v}">${l}</button>`).join("")}</div></div>
+    ${shotsHtml()}
+    ${linked.length ? `<div><div class="lbl" style="margin-bottom:6px">Trades from this plan</div><div class="list">${linked.map(rowHtml).join("")}</div></div>` : ""}
+    <div class="actions"><button class="btn" data-act="save-plan" id="save-btn">${ex ? "Save plan" : "Save plan"}</button>${ex ? `<button class="btn ghost" data-act="trade-from-plan" data-id="${ex.id}">Log trade</button>` : ""}</div>
+    ${ex ? `<button class="btn danger" data-act="del" data-kind="plans" data-id="${ex.id}">Delete plan</button>` : ""}
+  `);
+  calcPlan();
+}
+function readPlanForm() {
+  const d = draft.data, g = id => $("#" + id)?.value.trim();
+  ["symbol", "horizon", "thesis", "catalysts", "invalidation", "research"].forEach(k => d[k] = g(k) || null);
+  ["entry", "stop", "target", "size"].forEach(k => d[k] = n(g(k)));
+  if (d.symbol) d.symbol = d.symbol.toUpperCase();
+  return d;
+}
+function calcPlan() {
+  if (draft?.kind !== "plan") return;
+  const p = readPlanForm(), rr = planRR(p);
+  const risk = n(p.entry) != null && n(p.stop) != null && n(p.size) ? Math.abs(p.entry - p.stop) * p.size : null;
+  const rew = n(p.entry) != null && n(p.target) != null && n(p.size) ? Math.abs(p.target - p.entry) * p.size : null;
+  const bad = n(p.entry) != null && n(p.stop) != null && (p.side === "short" ? p.stop < p.entry : p.stop > p.entry);
+  $("#calc").innerHTML = `<div><span>Reward : risk</span><b>${rr ? rr.toFixed(2) : "—"}</b></div><div><span>$ at risk</span><b class="loss">${risk ? money(risk, false) : "—"}</b></div><div><span>$ to target</span><b class="gain">${rew ? money(rew, false) : "—"}</b></div>${bad ? `<div style="flex-basis:100%"><span class="loss" style="text-transform:none;letter-spacing:0;font-size:12px">Stop is on the wrong side of entry for a ${p.side}.</span></div>` : ""}`;
+}
+
+/* ---------- persistence ---------- */
+async function uploadShots() {
+  const ids = [];
+  for (const s of draft.shots) {
+    if (s.id) { ids.push(s.id); continue; }
+    if (!assets) continue;
+    const r = await assets.upload(s.file);
+    s.id = r.id; ids.push(r.id);
+  }
+  return ids;
+}
+async function save(kind) {
+  const btn = $("#save-btn"); btn.disabled = true; btn.innerHTML = `<span class="spin"></span> Saving`;
+  try {
+    const d = kind === "trades" ? readTradeForm() : readPlanForm();
+    d.shots = await uploadShots();
+    d.updatedAt = Date.now();
+    if (!draft.id) { d.createdAt = Date.now(); draft.id = uid(); }
+    d.id = draft.id;
+    const body = JSON.parse(JSON.stringify(d));
+    if (db) await db.collection(kind).doc(draft.id).set(body);
+    else { const arr = S[kind], i = arr.findIndex(x => x.id === d.id); i >= 0 ? arr[i] = body : arr.push(body); }
+    if (kind === "trades" && d.planId) {
+      const p = S.plans.find(x => x.id === d.planId);
+      if (p && (p.status || "idea") !== "executed" && db) await db.collection("plans").doc(p.id).update({ status: "executed", updatedAt: Date.now() });
+    }
+    closeSheet(); render();
+    toast(kind === "trades" ? "Trade saved" : "Plan saved");
+  } catch (e) {
+    btn.disabled = false; btn.textContent = "Try again";
+    toast(e?.code === "not_granted" || e?.code === "permission_denied" ? "You don't have permission to save here." : "Couldn't save: " + (e?.code || e?.message || "error"));
+  }
+}
+async function saveAll() {
+  const btn = $('[data-act="save-all"]'); btn.disabled = true; btn.innerHTML = `<span class="spin"></span> Saving`;
+  try {
+    let ids = [];
+    if (assets) for (const f of draft.files) ids.push((await assets.upload(f)).id);
+    for (const c of draft.cands) {
+      const id = uid(), d = { ...c, id, shots: ids, createdAt: Date.now(), updatedAt: Date.now() };
+      if (db) await db.collection("trades").doc(id).set(d); else S.trades.push(d);
+    }
+    const k = draft.cands.length; closeSheet(); render(); toast(`${k} trades saved`);
+  } catch (e) { btn.disabled = false; btn.textContent = "Try again"; toast("Couldn't save: " + (e?.code || e?.message)); }
+}
+async function del(kind, id, el) {
+  if (el.dataset.armed !== "1") { el.dataset.armed = "1"; el.textContent = "Tap again to delete"; setTimeout(() => { if (el.isConnected) { el.dataset.armed = ""; el.textContent = kind === "trades" ? "Delete trade" : "Delete plan"; } }, 3000); return; }
+  try {
+    if (db) await db.collection(kind).doc(id).delete(); else S[kind] = S[kind].filter(x => x.id !== id);
+    closeSheet(); render(); toast("Deleted");
+  } catch (e) { toast("Couldn't delete: " + (e?.code || e?.message)); }
+}
+
+async function coach() {
+  const btn = $("#coach-btn"), out = $("#coach-out");
+  btn.disabled = true; out.textContent = "Thinking…";
+  const s = stats(S.trades);
+  const rows = S.trades.slice().sort((a, b) => sortKey(b).localeCompare(sortKey(a))).slice(0, 100).map(t => ({
+    d: dayOf(t), sym: t.symbol, side: t.side, inst: t.instrument, qty: t.qty, entry: t.entry, exit: t.exit, pnl: pnlOf(t), R: rOf(t)?.toFixed(2),
+    setup: t.setup, plan: !!t.planId, followed: t.followed, grade: t.grade, mistakes: t.mistakes, hold: t.entryAt && t.exitAt ? Math.round((new Date(t.exitAt) - new Date(t.entryAt)) / 60000) + "m" : null, notes: (t.notes || "").slice(0, 160)
+  }));
+  const plans = S.plans.slice(0, 30).map(p => ({ sym: p.symbol, side: p.side, status: p.status, rr: planRR(p)?.toFixed(1), thesis: (p.thesis || "").slice(0, 200) }));
+  const prompt = `You are a blunt, specific trading performance coach. Review this trader's journal.
+Summary: ${JSON.stringify({ ...s, pf: s.pf === Infinity ? "inf" : s.pf })}
+Trades (newest first): ${JSON.stringify(rows)}
+Plans: ${JSON.stringify(plans)}
+Write plain text, no markdown headers or asterisks, under 220 words, in four short parts labelled "What's working:", "What's costing you:", "Patterns:", and "One rule for next week:". Cite specific numbers, setups, symbols and mistakes from the data. If there are too few trades to judge, say what to track instead.`;
+  try {
+    const r = await sample(prompt, { cache: false, onText: u => { out.textContent = u.text; } });
+    S.coach = r.text;
+  } catch (e) { out.textContent = e?.code === "not_granted" ? "Review was declined for this page." : "Couldn't get a review (" + (e?.code || "error") + ")."; }
+  btn.disabled = false; btn.textContent = "Run again";
+}
+
+/* ---------- events ---------- */
+document.addEventListener("click", e => {
+  const el = e.target.closest("[data-act],[data-tab]"); if (!el) return;
+  if (el.dataset.tab) return setTab(el.dataset.tab);
+  const a = el.dataset.act;
+  if (a === "scrim" && e.target !== el) return;
+  switch (a) {
+    case "scrim": case "close": closeSheet(); break;
+    case "capture": openCapture(); break;
+    case "pick": $("#file-in").click(); break;
+    case "manual": openTrade(null); break;
+    case "filter": S.filter = el.dataset.v; render(); break;
+    case "plan-filter": S.planFilter = el.dataset.v; render(); break;
+    case "open-trade": openTrade(el.dataset.id); break;
+    case "open-plan": openPlan(el.dataset.id); break;
+    case "new-plan": openPlan(null); break;
+    case "cand": openTrade(null, draft.cands[+el.dataset.i], draft.files); break;
+    case "save-all": saveAll(); break;
+    case "save-trade": save("trades"); break;
+    case "save-plan": save("plans"); break;
+    case "del": del(el.dataset.kind, el.dataset.id, el); break;
+    case "coach": coach(); break;
+    case "cal": calOffset += +el.dataset.v; render(); break;
+    case "seg": {
+      draft.data[el.dataset.k] = el.getAttribute("aria-pressed") === "true" && el.dataset.k !== "side" && el.dataset.k !== "status" ? null : el.dataset.v;
+      el.parentElement.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", draft.data[el.dataset.k] === b.dataset.v));
+      draft.kind === "trade" ? calcTrade() : calcPlan(); break;
+    }
+    case "mistake": {
+      const m = new Set(draft.data.mistakes || []); m.has(el.dataset.v) ? m.delete(el.dataset.v) : m.add(el.dataset.v);
+      draft.data.mistakes = [...m]; el.setAttribute("aria-pressed", m.has(el.dataset.v)); break;
+    }
+    case "rm-shot": draft.shots.splice(+el.dataset.i, 1); $("#shots").outerHTML = shotsInner(); break;
+    case "view-shot": {
+      const v = document.createElement("div"); v.className = "viewer"; v.innerHTML = `<img src="${esc(draft.shots[+el.dataset.i].url)}" alt="Screenshot">`;
+      v.onclick = () => v.remove(); document.body.append(v); break;
+    }
+    case "trade-from-plan": {
+      const p = readPlanForm(); const pid = draft.id;
+      openTrade(null, { symbol: p.symbol, side: p.side, entry: p.entry, stop: p.stop, qty: p.size, planId: pid, setup: null }); break;
+    }
+  }
+});
+document.addEventListener("input", e => {
+  if (e.target.id === "q") { S.q = e.target.value; const pos = e.target.selectionStart; render(); const q = $("#q"); q.focus(); try { q.setSelectionRange(pos, pos); } catch {} return; }
+  if (draft?.kind === "trade") calcTrade(); else if (draft?.kind === "plan") calcPlan();
+});
+document.addEventListener("change", e => { if (e.target.id === "planId" || e.target.id === "instrument") calcTrade(); });
+$("#file-in").addEventListener("change", e => { const f = [...e.target.files]; e.target.value = ""; handleFiles(f); });
+document.addEventListener("paste", e => {
+  const files = [...(e.clipboardData?.files || [])].filter(f => f.type.startsWith("image/"));
+  if (files.length) { e.preventDefault(); handleFiles(files); }
+});
+document.addEventListener("dragover", e => e.preventDefault());
+document.addEventListener("drop", e => { e.preventDefault(); if (e.dataTransfer?.files?.length) handleFiles(e.dataTransfer.files); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") { const v = $(".viewer"); v ? v.remove() : layer.innerHTML && closeSheet(); } });
+
+/* ---------- boot ---------- */
+let start = "log";
+try { start = localStorage.getItem("tj-tab") || start; } catch {}
+if (["log", "plans", "stats"].includes(location.hash.slice(1))) start = location.hash.slice(1);
+setTab(start);
+
+(async () => {
+  const use = n => window.claude?.use ? window.claude.use(n).catch(() => null) : Promise.resolve(null);
+  [db, assets, sample] = await Promise.all([use("db"), use("assets"), use("sample")]);
+  if (sample) { try { imgOK = !!(await sample.limits()).images; } catch { imgOK = false; } }
+  if (!db) { S.loaded = true; render(); return; }
+  const seen = new Set();
+  const done = k => { seen.add(k); S.loaded = seen.size === 2; render(); };
+  const err = e => { S.loaded = true; render(); toast("Couldn't load: " + (e?.code || "error")); };
+  db.collection("trades").onSnapshot(s => { S.trades = s.docs.map(d => ({ ...d.data(), id: d.id })); done("t"); }, err);
+  db.collection("plans").onSnapshot(s => { S.plans = s.docs.map(d => ({ ...d.data(), id: d.id })); done("p"); }, err);
+})();
+})();
+</script>
